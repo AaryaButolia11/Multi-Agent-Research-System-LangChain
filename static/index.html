@@ -10,6 +10,7 @@
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
     <style>
       :root {
         --primary: #00d4ff;
@@ -693,6 +694,20 @@
         text-decoration: none;
         background: rgba(0, 212, 255, 0.06);
       }
+      .dlrow {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin-top: 1.2rem;
+      }
+      button.dl {
+        margin-top: 0;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      button.dl:hover {
+        background: rgba(0, 212, 255, 0.16);
+      }
       .notice {
         font-family: "DM Mono";
         font-size: 0.62rem;
@@ -988,19 +1003,24 @@
       }
 
       function renderTabs() {
-        let host = $("#report-panel");
+        let host = document.getElementById("report-panel");
         if (!host) {
-          const p = document.createElement("div");
-          p.className = "panel";
-          p.style.marginTop = "1.2rem";
-          p.innerHTML = `<div class="label">📝 Research report</div>
+          host = document.createElement("div");
+          host.className = "panel";
+          host.id = "report-panel";
+          host.style.marginTop = "1.2rem";
+          host.innerHTML = `<div class="label">📝 Research report</div>
       <div class="tabs" id="tabs"></div>
       <div class="report" id="reportBox"></div>
-      <a class="dl" id="dl" download="research_report.md">⬇ Download this draft (.md)</a>`;
-          results.appendChild(p);
-          host = p;
+      <div class="dlrow">
+        <button class="dl" id="dlmd">⬇ Download .md</button>
+        <button class="dl" id="dlpdf">⬇ Download PDF</button>
+      </div>`;
+          results.appendChild(host);
+          host.querySelector("#dlmd").onclick = downloadMd;
+          host.querySelector("#dlpdf").onclick = downloadPdf;
         }
-        const tabs = $("#tabs");
+        const tabs = host.querySelector("#tabs");
         tabs.innerHTML = "";
         drafts.forEach((d, i) => {
           const b = document.createElement("button");
@@ -1013,7 +1033,6 @@
           b.onclick = () => {
             active = i;
             renderTabs();
-            showReport();
           };
           tabs.appendChild(b);
         });
@@ -1022,11 +1041,60 @@
       function showReport() {
         const d = drafts[active];
         if (!d) return;
-        $("#reportBox").innerHTML = marked.parse(d.report || "");
-        $("#dl").href = URL.createObjectURL(
-          new Blob([d.report], { type: "text/markdown" }),
+        document.getElementById("reportBox").innerHTML = marked.parse(
+          d.report || "",
         );
-        $("#dl").download = `research_report_draft${d.rev}.md`;
+      }
+      function downloadMd() {
+        const d = drafts[active];
+        if (!d) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(
+          new Blob([d.report || ""], { type: "text/markdown" }),
+        );
+        a.download = `research_report_draft${d.rev}.md`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      function downloadPdf() {
+        const d = drafts[active];
+        if (!d) return;
+        if (!window.html2pdf) {
+          alert("PDF library is still loading — try again in a second.");
+          return;
+        }
+        // Render the markdown onto a clean white sheet so the PDF is readable (not dark-themed).
+        const sheet = document.createElement("div");
+        sheet.style.cssText =
+          "background:#fff;color:#111;padding:36px;width:760px;" +
+          "font-family:Georgia,'Times New Roman',serif;line-height:1.6;font-size:12pt";
+        sheet.innerHTML = marked.parse(d.report || "");
+        sheet.querySelectorAll("a").forEach((a) => {
+          a.style.color = "#0645ad";
+          a.style.wordBreak = "break-all";
+        });
+        sheet.querySelectorAll("table").forEach((t) => {
+          t.style.borderCollapse = "collapse";
+          t.style.width = "100%";
+          t.style.margin = "10px 0";
+        });
+        sheet.querySelectorAll("th,td").forEach((c) => {
+          c.style.border = "1px solid #999";
+          c.style.padding = "6px 8px";
+          c.style.fontSize = "10pt";
+        });
+        html2pdf()
+          .set({
+            margin: [12, 12, 14, 12],
+            filename: `research_report_draft${d.rev}.pdf`,
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            pagebreak: { mode: ["css", "legacy"] },
+          })
+          .from(sheet)
+          .save();
       }
 
       function renderCritique(c) {

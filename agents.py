@@ -52,7 +52,9 @@ REPORT_STRUCTURES = {
 5. Discussion — interpretation, patterns, and where sources disagree.
 6. Limitations — of the sources and the analysis.
 7. Conclusion — summary and key takeaways.
-8. References — every source URL used.""",
+8. References — every source URL used.
+
+Citation style: cite inline as (https://full-url) right after each claim.""",
 
     "paper": """Structure the paper with these numbered sections (IEEE-style):
 1. Title — clear, concise, descriptive.
@@ -70,7 +72,12 @@ REPORT_STRUCTURES = {
 9. Limitations — of the sources and of this survey (recency, coverage, bias).
 10. Conclusion — summary of findings and key takeaways.
 11. Future Work — open questions and directions the sources point to.
-12. References — every source URL, numbered [1], [2], ... in IEEE style.""",
+12. References — a NUMBERED list in citation order: [1] Title. URL — one per line.
+
+Citation style (IEEE): cite sources inline with bracketed numbers like [1], [2].
+Assign each source a number the FIRST time it is cited and REUSE that same number for
+every later citation of it. A sentence drawing on two sources cites both, e.g. [1], [3].
+Every number used in the text MUST appear in the numbered References list, and vice versa.""",
 }
 
 
@@ -82,8 +89,8 @@ writer_prompt = ChatPromptTemplate.from_messages([
     ("system",
      "You are an expert research writer. Write clear, structured, factual reports "
      "grounded STRICTLY in the provided research. Follow these rules exactly:\n"
-     "1. Every factual claim, statistic, figure, or quote must be immediately "
-     "followed by its source URL in parentheses, e.g. (https://example.com).\n"
+     "1. Every factual claim, statistic, figure, or quote must be attributed to a "
+     "specific source, using the citation style specified in the structure below.\n"
      "2. If a claim is not supported by the provided sources, OMIT it. Do not use "
      "outside/general knowledge and do not guess.\n"
      "3. Never invent facts, numbers, or citations. If the evidence on a point is "
