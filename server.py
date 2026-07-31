@@ -1,19 +1,20 @@
 """
-Self-contained FastAPI backend — the frontend HTML is embedded below, so the
-root route never depends on a file on disk. No static/ folder needed.
+FastAPI backend.
 
-    GET /               -> serves the embedded single-page app
+    GET /               -> serves static/index.html
     GET /research?topic -> Server-Sent Events stream of the graph running live
 
-A MetricsCallback is attached per request, so the final "done" event carries
-token / cost / latency figures for the run.
+The frontend is served from static/index.html (read at request time), so there is
+no giant embedded string to corrupt. A MetricsCallback is attached per request, so
+the final "done" event carries token / cost / latency figures.
 
-Run:
-    uvicorn server:app --reload
-    then open  http://127.0.0.1:8000
+Run locally:
+    uvicorn server:app --reload      # http://127.0.0.1:8000
+On Render the start command binds $PORT.
 """
 
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
@@ -23,6 +24,20 @@ from metrics import MetricsCallback
 
 app = FastAPI(title="ResearchMind")
 
+# index.html lives next to this file, in ./static or alongside server.py.
+_HERE = Path(__file__).parent
+_INDEX_CANDIDATES = [_HERE / "static" / "index.html", _HERE / "index.html"]
+
+
+def _load_index() -> str:
+    for path in _INDEX_CANDIDATES:
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    return (
+        "<h1>index.html not found</h1>"
+        "<p>Expected static/index.html next to server.py.</p>"
+    )
+
 
 def sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
@@ -30,7 +45,7 @@ def sse(payload: dict) -> str:
 
 @app.get("/")
 async def index():
-    return HTMLResponse(INDEX_HTML)
+    return HTMLResponse(_load_index())
 
 
 @app.get("/favicon.ico")
