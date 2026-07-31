@@ -708,6 +708,53 @@
       button.dl:hover {
         background: rgba(0, 212, 255, 0.16);
       }
+      button.dl:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      /* Off-screen A4 sheet used only for PDF capture — styled like a research paper */
+      .pdf-sheet {
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        width: 794px;
+        box-sizing: border-box;
+        padding: 48px 56px;
+        background: #fff;
+        color: #111;
+        font-family: "Times New Roman", Georgia, serif;
+        font-size: 11pt;
+        line-height: 1.55;
+        text-align: justify;
+      }
+      .pdf-sheet h1 {
+        font-size: 19pt;
+        text-align: center;
+        margin: 0 0 6px;
+        line-height: 1.25;
+      }
+      .pdf-sheet h2 {
+        font-size: 13pt;
+        margin: 16px 0 6px;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 3px;
+      }
+      .pdf-sheet h3 {
+        font-size: 11.5pt;
+        margin: 12px 0 4px;
+      }
+      .pdf-sheet p {
+        margin: 0 0 9px;
+      }
+      .pdf-sheet ul,
+      .pdf-sheet ol {
+        margin: 0 0 9px 20px;
+      }
+      .pdf-sheet code {
+        font-family: "Courier New", monospace;
+        background: #f2f2f2;
+        padding: 0 3px;
+      }
       .notice {
         font-family: "DM Mono";
         font-size: 0.62rem;
@@ -1057,44 +1104,73 @@
         a.click();
         a.remove();
       }
-      function downloadPdf() {
+      async function downloadPdf() {
         const d = drafts[active];
         if (!d) return;
         if (!window.html2pdf) {
           alert("PDF library is still loading — try again in a second.");
           return;
         }
-        // Render the markdown onto a clean white sheet so the PDF is readable (not dark-themed).
+
+        const btn = document.getElementById("dlpdf");
+        const label = btn.textContent;
+        btn.textContent = "Generating…";
+        btn.disabled = true;
+
+        // Build a real, laid-out A4 sheet in the DOM (off-screen). An unattached or
+        // zero-height element captures blank — this is the fix for the blank pages.
         const sheet = document.createElement("div");
-        sheet.style.cssText =
-          "background:#fff;color:#111;padding:36px;width:760px;" +
-          "font-family:Georgia,'Times New Roman',serif;line-height:1.6;font-size:12pt";
+        sheet.className = "pdf-sheet";
         sheet.innerHTML = marked.parse(d.report || "");
+        // link + table styling for print
         sheet.querySelectorAll("a").forEach((a) => {
           a.style.color = "#0645ad";
-          a.style.wordBreak = "break-all";
+          a.style.wordBreak = "break-word";
         });
         sheet.querySelectorAll("table").forEach((t) => {
           t.style.borderCollapse = "collapse";
           t.style.width = "100%";
-          t.style.margin = "10px 0";
+          t.style.margin = "12px 0";
         });
         sheet.querySelectorAll("th,td").forEach((c) => {
           c.style.border = "1px solid #999";
           c.style.padding = "6px 8px";
           c.style.fontSize = "10pt";
+          c.style.textAlign = "left";
         });
-        html2pdf()
-          .set({
-            margin: [12, 12, 14, 12],
-            filename: `research_report_draft${d.rev}.pdf`,
-            image: { type: "jpeg", quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-            pagebreak: { mode: ["css", "legacy"] },
-          })
-          .from(sheet)
-          .save();
+        sheet.querySelectorAll("h1,h2,h3").forEach((h) => {
+          h.style.pageBreakAfter = "avoid";
+        });
+        document.body.appendChild(sheet);
+
+        try {
+          await new Promise((r) => setTimeout(r, 80)); // let layout settle before capture
+          await html2pdf()
+            .set({
+              margin: [14, 14, 16, 14],
+              filename: `research_report_draft${d.rev}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: "#ffffff",
+                windowWidth: 794,
+              },
+              jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+              pagebreak: {
+                mode: ["css", "legacy"],
+                avoid: ["tr", "h1", "h2", "h3"],
+              },
+            })
+            .from(sheet)
+            .save();
+        } catch (e) {
+          alert("PDF generation failed: " + e.message);
+        } finally {
+          sheet.remove();
+          btn.textContent = label;
+          btn.disabled = false;
+        }
       }
 
       function renderCritique(c) {
