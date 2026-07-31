@@ -41,6 +41,43 @@ class Critique(BaseModel):
 
 
 # ── Writer chain (revision-aware, strictly grounded) ──────────────────────────
+# Two selectable structures. The writer prompt takes {structure}, chosen per run.
+REPORT_STRUCTURES = {
+    "report": """Structure the report as:
+1. Title — clear and concise.
+2. Abstract — 100-200 words summarizing the topic, key findings, and takeaway.
+3. Introduction — background and why the topic matters.
+4. Key Findings — at least 3 well-explained points, each grounded with inline
+   citations. Include a short Markdown comparison table if the sources support one.
+5. Discussion — interpretation, patterns, and where sources disagree.
+6. Limitations — of the sources and the analysis.
+7. Conclusion — summary and key takeaways.
+8. References — every source URL used.""",
+
+    "paper": """Structure the paper with these numbered sections (IEEE-style):
+1. Title — clear, concise, descriptive.
+2. Abstract — 150-300 words: problem, approach, key findings, conclusion.
+3. Keywords — 4-8 key terms.
+4. Introduction — background, problem statement, objectives, and the questions addressed.
+5. Literature Review (Related Work) — what the sources report, existing approaches,
+   their limitations, and the gap this survey addresses.
+6. Methodology — this is a SURVEY grounded in web sources: describe how sources were
+   gathered, selection criteria, and how findings were synthesized. Do NOT invent a
+   dataset, model training, or experiments that were not performed.
+7. Findings & Comparative Analysis — synthesize the evidence with a Markdown comparison
+   table built ONLY from figures/claims the sources actually report; every row traceable.
+8. Discussion — interpretation, patterns, strengths, and where sources disagree.
+9. Limitations — of the sources and of this survey (recency, coverage, bias).
+10. Conclusion — summary of findings and key takeaways.
+11. Future Work — open questions and directions the sources point to.
+12. References — every source URL, numbered [1], [2], ... in IEEE style.""",
+}
+
+
+def structure_for(report_format: str) -> str:
+    return REPORT_STRUCTURES.get(report_format, REPORT_STRUCTURES["report"])
+
+
 writer_prompt = ChatPromptTemplate.from_messages([
     ("system",
      "You are an expert research writer. Write clear, structured, factual reports "
@@ -51,7 +88,7 @@ writer_prompt = ChatPromptTemplate.from_messages([
      "outside/general knowledge and do not guess.\n"
      "3. Never invent facts, numbers, or citations. If the evidence on a point is "
      "thin, say so explicitly rather than filling the gap."),
-    ("human", """Write a detailed research report on the topic below.
+    ("human", """Write a detailed, well-researched piece on the topic below.
 
 Topic: {topic}
 
@@ -60,17 +97,13 @@ Research gathered:
 
 {feedback}
 
-Structure the report as:
-- Title
-- Abstract
-- Introduction
-- Key Findings (minimum 3 well-explained points, each grounded in the research above)
-- Discussion
-- Conclusion
-- Sources / References (list every URL that appears in the research)
+{structure}
 
-Every factual sentence must cite its source URL inline, e.g. (https://...). Only
-include claims you can trace to the research above; omit anything you cannot support."""),
+RULES:
+- Every factual sentence must cite its source inline, e.g. (https://...) or [n].
+- Only include claims traceable to the research above; omit anything unsupported.
+- For any section where the sources genuinely lack material, say so briefly rather
+  than fabricating content, datasets, experiments, or results."""),
 ])
 
 writer_chain = writer_prompt | writer_llm | StrOutputParser()

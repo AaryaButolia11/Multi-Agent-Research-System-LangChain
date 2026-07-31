@@ -11,8 +11,9 @@ from graph import graph, initial_state
 from metrics import MetricsCallback
 
 
-async def run(topic: str, quality_bar: int = 8, max_revisions: int = 3) -> dict:
-    state = initial_state(topic, quality_bar, max_revisions)
+async def run(topic: str, quality_bar: int = 8, max_revisions: int = 3,
+              report_format: str = "report") -> dict:
+    state = initial_state(topic, quality_bar, max_revisions, report_format)
     cb = MetricsCallback()
     final: dict = {}
 
@@ -49,4 +50,5 @@ async def run(topic: str, quality_bar: int = 8, max_revisions: int = 3) -> dict:
 
 if __name__ == "__main__":
     topic = input("Enter a research topic: ").strip()
-    asyncio.run(run(topic))
+    fmt = input("Format [report/paper] (default report): ").strip() or "report"
+    asyncio.run(run(topic, report_format=fmt))

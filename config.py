@@ -15,6 +15,10 @@ WRITER_TEMPERATURE = 0.3
 CRITIC_TEMPERATURE = 0.0
 JUDGE_TEMPERATURE = 0.0
 
+# Default report structure: "report" (concise) or "paper" (full IEEE academic).
+# Overridable per-run via the CLI, the API (?report_format=), or the web UI.
+REPORT_FORMAT = "report"
+
 PRICING = {
     # model_name: {input $/1M, output $/1M}
     "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},

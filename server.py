@@ -54,9 +54,10 @@ async def favicon():
 
 
 @app.get("/research")
-async def research(request: Request, topic: str, quality_bar: int = 8, max_revisions: int = 3):
+async def research(request: Request, topic: str, quality_bar: int = 8,
+                   max_revisions: int = 3, report_format: str = "report"):
     async def event_stream():
-        state = initial_state(topic, quality_bar, max_revisions)
+        state = initial_state(topic, quality_bar, max_revisions, report_format)
         cb = MetricsCallback()
         yield sse({"event": "start", "topic": topic, "quality_bar": quality_bar})
 

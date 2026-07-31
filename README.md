@@ -1,34 +1,43 @@
-# 🧠 Multi-Agent AI Research Pipeline
+# 🧠 ResearchMind — Self-Refining Multi-Agent Research System
 
-> An autonomous, LangGraph-powered research system that **searches the web, scrapes sources, writes a structured report, and critiques its own work** — end to end, in a single run.
+> A production-minded, **LangGraph**-powered research agent that searches the web, scrapes sources in parallel, writes a grounded report, and **critiques and re-researches its own work** until the draft clears a quality bar — with full cost tracing, automated evaluation, reliability, tests, and a **live deployment**.
 
 <p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white">
-  <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-Multi--Agent-1C3C3C">
-  <img alt="LangChain" src="https://img.shields.io/badge/LangChain-LCEL-121212">
-  <img alt="Groq" src="https://img.shields.io/badge/Groq-LLaMA%203.3%2070B-F55036">
-  <img alt="Tavily" src="https://img.shields.io/badge/Tavily-Web%20Search-4285F4">
+  <a href="https://researchmind-8wxf.onrender.com/"><img alt="Live Demo" src="https://img.shields.io/badge/🚀_Live_Demo-Render-46E3B7"></a>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-State_Machine-1C3C3C">
+  <img alt="Groq" src="https://img.shields.io/badge/Groq-LLaMA_3.3_70B-F55036">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-SSE_Streaming-009688?logo=fastapi&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
 </p>
+
+**🔗 Live demo:** https://researchmind-8wxf.onrender.com/
+_(free tier — first load after idle may take ~30–60s to wake)_
 
 ---
 
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [Why This Design](#-why-this-design)
-- [Features](#-features)
+- [Key Capabilities](#-key-capabilities)
 - [System Architecture](#-system-architecture)
+- [The Self-Refinement Loop](#-the-self-refinement-loop)
 - [Pipeline Flow](#-pipeline-flow)
+- [Agents & Components](#-agents--components)
 - [Pipeline State](#-pipeline-state)
-- [Agent & Chain Roles](#-agent--chain-roles)
-- [Prerequisites](#-prerequisites)
+- [Reliability & Production Concerns](#-reliability--production-concerns)
+- [Observability — Cost / Token / Latency](#-observability--cost--token--latency)
+- [Evaluation Harness](#-evaluation-harness)
+- [Measured Results](#-measured-results)
+- [Tech Stack](#-tech-stack)
+- [Project Structure](#-project-structure)
 - [Installation](#-installation)
 - [Configuration](#-configuration)
 - [Usage](#-usage)
-- [Project Structure](#-project-structure)
-- [Example Output](#-example-output)
-- [Design Notes](#-design-notes)
+- [Deployment](#-deployment)
+- [Testing](#-testing)
+- [Design Decisions](#-design-decisions)
 - [Roadmap](#-roadmap)
 - [License](#-license)
 
@@ -36,42 +45,31 @@
 
 ## 🔎 Overview
 
-This project implements a **4-stage agentic research pipeline** built on **LangChain**, **LangGraph**, and **Groq's LLaMA 3.3 70B**. Given a single research topic, the system runs a chain of specialized components that each own one job:
+**ResearchMind** turns a single topic into a grounded, cited research report using four coordinated agents on a **LangGraph state machine**. Unlike a linear pipeline, the **Critic controls the flow**: it scores each draft and, when the draft falls short, routes control through a **gap-search** agent that gathers _new_ evidence before the Writer rewrites — so refinement improves substance, not just wording.
 
-| Stage | Component | What it does |
-| :---: | --------- | ------------ |
-| 1️⃣ | **Search Agent** | Finds the top relevant, recent web results for the topic |
-| 2️⃣ | **Reader Agent** | Scrapes the most useful source for deeper, full-text content |
-| 3️⃣ | **Writer Chain** | Drafts a full, structured, academic-style research report |
-| 4️⃣ | **Critic Chain** | Scores the report and returns actionable critique |
+The system is built to be _operated_, not just demoed: every run is traced for **tokens, cost, and latency**; an **evaluation harness** scores report quality and faithfulness against sources; a **reliability layer** retries transient failures and degrades gracefully; an offline **test suite** guards the core logic; and the whole thing is **deployed live** on Render as a streaming web app.
 
-The result is a single state dictionary containing the search results, scraped content, final report, and the critic's feedback — a transparent, inspectable record of every step.
-
----
-
-## 💡 Why This Design
-
-Every architectural choice here is deliberate:
-
-| Decision | Rationale |
-| -------- | --------- |
-| **Agents for retrieval, chains for generation** | Searching and scraping need *tool-calling and reasoning* (LangGraph agents). Writing and critiquing are *deterministic transforms* of known input — plain LCEL chains are simpler, faster, and cheaper. |
-| **LangGraph over a hand-rolled loop** | Gives an explicit, inspectable pipeline state and makes it trivial to add branches, retries, or a revision loop later. |
-| **Groq inference** | LLaMA 3.3 70B on Groq's LPU hardware returns completions in a few hundred ms, so a 4-stage pipeline still finishes in seconds rather than minutes. |
-| **A dedicated Critic stage** | Self-critique surfaces weak methodology and uncited claims *before* a human reads the report — turning a one-shot generator into a quality-gated one. |
-| **BeautifulSoup scraping (strip scripts/styles/nav/footer)** | Clean, content-only text materially improves report quality vs. dumping raw HTML into the prompt. |
+|                |                                                                             |
+| -------------- | --------------------------------------------------------------------------- |
+| **Input**      | A research topic (e.g. _"Electric vehicle adoption trends 2025"_)           |
+| **Output**     | A structured, inline-cited report + machine-readable critique + run metrics |
+| **Models**     | Groq `llama-3.3-70b-versatile` (Writer, Critic, Judge, Gap-query)           |
+| **Interfaces** | Web UI (SSE streaming), CLI, and a Python API (`graph.astream`)             |
 
 ---
 
-## ✨ Features
+## ✨ Key Capabilities
 
-- 🤖 **Multi-Agent Architecture** — separate specialized agents for searching and reading
-- 🌐 **Real-time Web Search** — powered by the **Tavily Search API**
-- 📄 **Deep Content Scraping** — BeautifulSoup URL scraper that strips boilerplate
-- ✍️ **Automated Report Writing** — structured academic-style reports via **LCEL** chains
-- 🧠 **Self-Critique Loop** — a critic chain scores and reviews the generated report
-- ⚡ **Groq Inference** — ultra-fast LLM responses with **LLaMA 3.3 70B**
-- 🧾 **Fully Inspectable State** — every intermediate artifact is returned, not hidden
+- 🔁 **Self-refining loop with re-research** — the Critic scores each draft; a below-bar draft triggers a **gap-search** node that generates fresh queries from the critique, pulls new sources, and drives a rewrite.
+- 🧭 **LangGraph state machine** — explicit nodes, conditional edges, and a bounded revision loop with early-stopping when a revision fails to improve.
+- 🧱 **Structured evaluation** — the Critic returns a Pydantic object (`score`, `strengths`, `improvements`, `unsupported_claims`, `verdict`); the score drives control flow.
+- ⚡ **Async parallel scraping** — top-N sources fetched concurrently with `httpx` + `asyncio.gather`.
+- 📌 **Grounded, cited writing** — every factual claim carries an inline source URL; unsupported claims are omitted.
+- 📡 **Live streaming UI** — FastAPI streams each agent step over **Server-Sent Events**; the frontend shows the pipeline, sources, a quality-climb chart, draft-version tabs, and run metrics.
+- 💰 **Cost / token / latency tracing** — a metrics callback prices every LLM call from a configurable table.
+- 🧪 **Automated eval harness** — LLM-as-judge scores faithfulness / relevance / coverage against sources; writes CSV + Markdown reports.
+- 🛡 **Reliability layer** — retries with backoff that honor Groq's `retry-after`, structured-output fallback, and empty-source guards.
+- ✅ **Tested & deployed** — offline pytest suite + live Render deployment (Blueprint or Docker).
 
 ---
 
@@ -79,246 +77,323 @@ Every architectural choice here is deliberate:
 
 ```mermaid
 flowchart TD
-    U([👤 User Input: Topic])
+    U([👤 Topic])
 
-    subgraph RETRIEVAL["🔍 Retrieval — LangGraph Agents"]
-        SA["🕵️ Search Agent"]
-        RA["📖 Reader Agent"]
+    subgraph GRAPH["🧭 LangGraph State Machine"]
+        S["🔍 Search Agent<br/>Tavily · advanced depth"]
+        R["📄 Reader Agent<br/>async parallel scrape"]
+        W["📝 Writer Agent<br/>grounded, cited draft"]
+        C{"🧐 Critic Agent<br/>structured score"}
+        G["🔎 Gap-Search Agent<br/>new queries → new sources"]
     end
 
-    subgraph GENERATION["✍️ Generation — LCEL Chains"]
-        WC["📝 Writer Chain"]
-        CC["🧠 Critic Chain"]
-    end
+    OUT([📦 Report + Critique + Metrics])
 
-    OUT([📦 Final State Dict])
-
-    U --> SA
-    SA -->|web_search · Tavily| RA
-    RA -->|scrape_url · BeautifulSoup| WC
-    WC -->|draft report| CC
-    CC --> OUT
-
-    SA -.->|search_results| OUT
-    RA -.->|scraped_content| OUT
-    WC -.->|report| OUT
-    CC -.->|feedback| OUT
+    U --> S --> R --> W --> C
+    C -->|"score ≥ bar<br/>or revision cap<br/>or no improvement"| OUT
+    C -->|"below bar & improving"| G
+    G -->|"append new evidence"| W
 
     classDef agent fill:#1C3C3C,stroke:#4ade80,color:#fff
-    classDef chain fill:#312e81,stroke:#818cf8,color:#fff
+    classDef gate fill:#312e81,stroke:#818cf8,color:#fff
     classDef io fill:#7c2d12,stroke:#fb923c,color:#fff
-    class SA,RA agent
-    class WC,CC chain
+    class S,R,W,G agent
+    class C gate
     class U,OUT io
 ```
+
+Cross-cutting layers wrap every run: **reliability** (retries/fallback on all LLM calls), **metrics** (token/cost/latency callback), and the **SSE server** that streams each node to the browser.
+
+---
+
+## 🔁 The Self-Refinement Loop
+
+This is the core idea and what makes it a _graph_, not a chain:
+
+1. **Writer** drafts a report from the gathered sources.
+2. **Critic** scores it 0–10 against those sources (grounding-first rubric) and returns structured feedback.
+3. A **conditional edge** decides:
+   - `score ≥ quality_bar` → **accept** (done)
+   - `revision ≥ max_revisions` → **accept** (bounded)
+   - revision **didn't beat the best score** → **accept** (early-stop, avoids wasted calls)
+   - otherwise → **gap-search**
+4. **Gap-Search** converts the Critic's `improvements` into 1–2 topic-anchored web queries, fetches and scrapes **new** sources (deduped against everything seen), appends them, and loops back to the Writer.
+5. The **best-scoring draft** is always kept and returned — even if a later revision scores lower.
 
 ---
 
 ## 🔄 Pipeline Flow
 
-A step-by-step view of how data moves and accumulates through the run:
-
 ```mermaid
 sequenceDiagram
     autonumber
     participant U as User
-    participant S as Search Agent
-    participant T as Tavily API
-    participant R as Reader Agent
-    participant W as Writer Chain
-    participant C as Critic Chain
+    participant S as Search
+    participant R as Reader
+    participant W as Writer
+    participant C as Critic
+    participant G as Gap-Search
     participant L as Groq · LLaMA 3.3 70B
 
-    U->>S: research topic
-    S->>T: web_search(topic)
-    T-->>S: top 5 results
-    Note over S: search_results ✔
+    U->>S: topic
+    S->>S: Tavily search (filter junk/social/video)
+    R->>R: scrape top-N in parallel (httpx + gather)
+    R->>W: search results + scraped sources
+    W->>L: draft (grounded, inline citations)
+    L-->>W: report
+    W->>C: report + sources
+    C->>L: structured critique
+    L-->>C: {score, improvements, unsupported_claims, ...}
 
-    S->>R: best URL
-    R->>R: scrape_url() → strip scripts/nav/footer
-    Note over R: scraped_content ✔
-
-    R->>W: search_results + scraped_content
-    W->>L: Prompt | LLM | StrOutputParser
-    L-->>W: structured report
-    Note over W: report ✔
-
-    W->>C: report
-    C->>L: Prompt | LLM | StrOutputParser
-    L-->>C: score + critique
-    Note over C: feedback ✔
-
-    C-->>U: 📦 final state dict
+    alt score below bar & improving
+        C->>G: improvements
+        G->>L: turn gaps into queries
+        L-->>G: new queries
+        G->>R: fetch + scrape new sources
+        G->>W: append evidence → rewrite
+    else accept
+        C-->>U: 📦 best report + metrics
+    end
 ```
+
+---
+
+## 🧩 Agents & Components
+
+| Component                                | Role                                                                  | Powered by                                 |
+| ---------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------ |
+| **Search Agent** (`search_node`)         | Finds relevant, recent sources; filters out video/social/thin results | Tavily (`search_depth="advanced"`)         |
+| **Reader Agent** (`read_node`)           | Scrapes top-N sources concurrently, strips boilerplate                | `httpx` + `asyncio.gather` + BeautifulSoup |
+| **Writer Agent** (`write_node`)          | Drafts a structured, inline-cited report grounded strictly in sources | Groq LLaMA 3.3 70B (LCEL chain)            |
+| **Critic Agent** (`critic_node`)         | Scores the draft against sources; returns structured critique         | Groq + `with_structured_output`            |
+| **Gap-Search Agent** (`gap_search_node`) | Converts critique into new queries and gathers fresh evidence         | Groq + Tavily                              |
+| **Judge** (eval only)                    | Scores faithfulness / relevance / coverage vs sources                 | Groq + `with_structured_output`            |
 
 ---
 
 ## 📦 Pipeline State
 
-The pipeline returns a single Python `dict` that grows as each stage completes. This is the contract every component reads from and writes to:
-
 ```mermaid
 classDiagram
-    class PipelineState {
+    class ResearchState {
         +str topic
-        +list search_results
-        +str scraped_content
+        +str search_results
+        +list~str~ urls
+        +list~str~ seen_urls
+        +str sources
         +str report
-        +str feedback
+        +dict critique
+        +int score
+        +int revision
+        +int quality_bar
+        +int max_revisions
+        +list~int~ score_history
+        +str best_report
+        +int best_score
+        +bool improving
     }
 ```
 
-| Key | Written by | Type | Description |
-| --- | ---------- | ---- | ----------- |
-| `topic` | User | `str` | The research question entered at runtime |
-| `search_results` | Search Agent | `list` | Top relevant web results from Tavily |
-| `scraped_content` | Reader Agent | `str` | Cleaned full text of the best source |
-| `report` | Writer Chain | `str` | Final structured research report |
-| `feedback` | Critic Chain | `str` | Score + strengths + areas to improve |
+The state accumulates across gap rounds (`sources` grows, `seen_urls` dedupes), tracks the score trajectory (`score_history`), and always retains the best draft (`best_report` / `best_score`).
 
 ---
 
-## 🧩 Agent & Chain Roles
+## 🛡 Reliability & Production Concerns
 
-| Component | Type | Tool / Chain | Purpose |
-| --------- | ---- | ------------ | ------- |
-| `build_search_agent()` | LangGraph Agent | `web_search` (Tavily) | Finds top 5 relevant web results |
-| `build_reader_agent()` | LangGraph Agent | `scrape_url` (BS4) | Scrapes the most relevant URL |
-| `writer_chain` | LCEL Chain | Prompt + LLM + Parser | Drafts a structured research report |
-| `critic_chain` | LCEL Chain | Prompt + LLM + Parser | Scores and critiques the report |
+Every LLM call routes through `ainvoke_safe` (`reliability.py`):
 
----
-
-## ✅ Prerequisites
-
-- **Python 3.9+**
-- A **Groq API key** — [console.groq.com](https://console.groq.com)
-- A **Tavily API key** — [tavily.com](https://tavily.com)
+- **Retry with backoff** on transient Groq failures — rate limits, timeouts, connection drops, 5xx, and the intermittent malformed structured-output `400` (`tool_use_failed`).
+- **Honors Groq's `retry-after`** — parses the _"try again in Xs"_ hint on 429s and waits exactly that; gives up fast when the wait is long (a daily-budget limit, not a transient one).
+- **Graceful fallback** — if the structured Critic keeps failing, it accepts the current draft rather than crashing; gap-search falls back to the topic query; the judge degrades to a neutral score.
+- **Empty-source guards** — zero results or all-scrapes-failed produce a clear marker, never a garbage report.
+- **Tavily retries** — transient search failures back off and retry.
 
 ---
 
-## ⚙️ Installation
+## 📊 Observability — Cost / Token / Latency
+
+A `MetricsCallback` (`metrics.py`) listens to every LLM call and records model, input/output tokens, and latency. `config.py` holds a pricing table (verify at [groq.com/pricing](https://groq.com/pricing)), so each run reports real dollars:
+
+```
+2 LLM calls · 7,151 tokens · $0.0044 · 3.7s model time
+```
+
+Metrics appear at the end of every CLI run, in the web UI's run-metrics line, and in the `done` SSE event.
+
+---
+
+## 🧪 Evaluation Harness
+
+`evaluate.py` runs a fixed topic suite and, per topic, measures:
+
+- **Quality** — first-draft score, final score, and the lift the loop added
+- **Grounding** — an LLM judge scores **faithfulness / relevance / coverage** of the report _against its sources_ (faithfulness is the hallucination signal)
+- **Operations** — LLM calls, tokens, cost (USD), wall-clock time
+
+It writes `eval_results.csv` and `eval_report.md`, prints an aggregate table, and paces itself (delay between topics, `max_revisions=1`, running token total) to respect free-tier rate limits.
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/multi-agent-research-pipeline.git
-cd multi-agent-research-pipeline
-
-# Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-**`requirements.txt`**
-
-```
-langchain
-langchain-groq
-langgraph
-tavily-python
-requests
-beautifulsoup4
-rich
-python-dotenv
+python evaluate.py --limit 3 --delay 30     # 3 topics, 30s apart
+python evaluate.py                          # full suite
 ```
 
 ---
 
-## 🔐 Configuration
+## 📈 Measured Results
 
-Create a `.env` file in the project root:
+Measured across a fixed topic suite via `evaluate.py` (Groq `llama-3.3-70b-versatile`, free tier):
 
-```env
-TAVILY_API_KEY=your_tavily_api_key_here
-GROQ_API_KEY=your_groq_api_key_here
-```
+| Metric                          | Value         |
+| ------------------------------- | ------------- |
+| Avg report score (LLM critic)   | **~7.3 / 10** |
+| Faithfulness (judge vs sources) | **~0.7–0.8**  |
+| Relevance                       | **~0.87**     |
+| Cost per report                 | **~$0.006**   |
+| Tokens per report               | **~9–10k**    |
+| Latency (warm, no revision)     | **~10–16s**   |
+| LLM calls (no revision)         | **2**         |
 
-> ⚠️ `.env` is gitignored — never commit your keys.
+> Numbers are honest measurements, not targets — the calibrated Critic accepts strong first drafts (efficient convergence) and the loop engages when a draft falls short.
 
 ---
 
-## ▶️ Usage
+## 🛠 Tech Stack
 
-```bash
-python pipeline.py
-```
-
-You'll be prompted for a topic:
-
-```
-Enter a research topic : Impact of AI on healthcare
-```
-
-The pipeline runs all four stages and prints each step's progress and the final critic report to the console.
+**Orchestration:** LangGraph · LangChain (LCEL) · Groq (LLaMA 3.3 70B)
+**Retrieval:** Tavily Search API · httpx (async) · BeautifulSoup
+**Backend:** FastAPI · Uvicorn · Server-Sent Events
+**Reliability/Validation:** tenacity · Pydantic
+**Testing/Eval:** pytest · pytest-asyncio · LLM-as-judge
+**Deployment:** Render (Blueprint) · Docker
 
 ---
 
 ## 📁 Project Structure
 
 ```
-multi-agent-research-pipeline/
-├── tools.py           # Tool definitions: web_search, scrape_url
-├── agents.py          # Agent builders + writer/critic LCEL chains
-├── pipeline.py        # Main runner (run_research_pipeline)
-├── .env               # API keys (not committed)
+research_pipeline/
+├── graph.py            # LangGraph state machine: refine loop + gap-search re-research
+├── agents.py           # Writer / Critic / Gap-query / Judge chains + Pydantic schemas
+├── tools.py            # Tavily search (filtered) + async parallel scraper
+├── reliability.py      # Retry-with-backoff (honors retry-after) + safe invoke/fallback
+├── metrics.py          # Token / cost / latency callback
+├── config.py           # Model names + pricing table
+├── evaluate.py         # Eval harness (quality + grounding + cost) → CSV / MD
+├── server.py           # FastAPI SSE backend (serves static/index.html)
+├── static/
+│   └── index.html      # Streaming web UI (pipeline, sources, climb, draft tabs, metrics)
+├── pipeline.py         # CLI runner
+├── test_pipeline.py    # Offline unit tests + opt-in live test
+├── render.yaml         # Render Blueprint (native Python deploy)
+├── Dockerfile          # Container deploy option
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## 🖥 Example Output
+## ⚙️ Installation
 
-```text
-step 1 - search agent is working ...
-step 2 - reader agent is scraping top resources ...
-step 3 - writer is drafting the report ...
-step 4 - critic is reviewing the report ...
+```bash
+git clone https://github.com/AaryaButolia11/Multi-Agent-Research-Sys-LangChain.git
+cd Multi-Agent-Research-Sys-LangChain
 
-Critic Report:
-Score: 8/10
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
-Strengths:
-- Well-structured with clear sections
-- Includes relevant and recent sources
+pip install -r requirements.txt
+```
 
-Areas to Improve:
-- Methodology section could be more detailed
-- Some claims lack direct citation
+## 🔐 Configuration
 
-One-line verdict:
-A solid, informative report with minor gaps in academic rigor.
+Create a `.env` in the project root (a `.env.example` is provided):
+
+```env
+GROQ_API_KEY=your_groq_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+```
+
+> `.env` is gitignored — never commit keys. Get them at [console.groq.com](https://console.groq.com) and [tavily.com](https://tavily.com).
+
+## ▶️ Usage
+
+```bash
+# CLI — streams each agent to the terminal, prints cost
+python pipeline.py
+
+# Web UI — http://127.0.0.1:8000
+uvicorn server:app --reload
+
+# Evaluation
+python evaluate.py --limit 3 --delay 30
+
+# Tests
+pytest                     # offline
+set RUN_LIVE=1 && pytest   # + one real end-to-end run (Windows)
 ```
 
 ---
 
-## 🗒 Design Notes
+## 🚀 Deployment
 
-- The pipeline state is returned as a Python `dict` with keys: `search_results`, `scraped_content`, `report`, `feedback`.
-- The `scrape_url` tool strips `<script>`, `<style>`, `<nav>`, and `<footer>` tags for clean extraction.
-- Writer and Critic chains use `ChatPromptTemplate` with structured output formatting.
-- Retrieval uses LangGraph **agents** (tool-calling); generation uses lightweight **LCEL chains** — the right tool for each job.
+**Live:** https://researchmind-8wxf.onrender.com/
+
+Deployed on **Render** via `render.yaml` (native Python). To deploy your own:
+
+1. Push the repo to GitHub.
+2. Render → **New → Blueprint** → connect the repo (reads `render.yaml`).
+3. Set `GROQ_API_KEY` and `TAVILY_API_KEY` as secrets when prompted.
+4. Apply — Render runs `pip install` then `uvicorn server:app --host 0.0.0.0 --port $PORT`.
+
+**Docker option:** a `Dockerfile` is included; set `runtime: docker` in `render.yaml` (or `docker build -t researchmind . && docker run -p 8000:8000 --env-file .env researchmind`).
+
+> Free-tier instances sleep after ~15 min idle; the first request wakes them in ~30–60s.
+
+---
+
+## ✅ Testing
+
+Offline tests (no keys, no network) cover the cost math, metrics aggregation, routing logic, and the Groq `retry-after` parser — a fast regression guard suitable for CI. An opt-in live test runs one real end-to-end pipeline behind `RUN_LIVE=1`.
+
+```bash
+pytest -q
+```
+
+---
+
+## 🗒 Design Decisions
+
+| Decision                                  | Rationale                                                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **LangGraph over a linear chain**         | The Critic's numeric score drives a conditional edge — refinement is real control flow, not a hard-coded pass. |
+| **Gap-search on the loop-back path**      | A rejected draft gets _new evidence_, not just a reworded prompt — the only way scores can genuinely improve.  |
+| **Structured Critic output**              | A machine-readable score is something you can branch on and log; free text isn't.                              |
+| **Grounding-first Critic + cited Writer** | Faithfulness is the metric that matters for research; the rubric and prompts optimize for traceable claims.    |
+| **Async parallel scraping**               | N pages in the time of one — deeper research without the latency.                                              |
+| **Best-draft retention + early-stop**     | Never returns a worse draft; never burns calls on a plateau.                                                   |
+| **Reliability at every LLM call**         | External APIs fail intermittently; production code assumes it and self-heals.                                  |
+| **Embedded metrics + eval harness**       | You can't improve what you can't measure — cost and quality are first-class.                                   |
 
 ---
 
 ## 🛣 Roadmap
 
-- [ ] **Revision loop** — feed critic feedback back to the writer for a second draft when the score is below a threshold.
-- [ ] **Multi-source scraping** — read the top *N* URLs instead of just the best one.
-- [ ] **Citation enforcement** — require inline source attribution in the report.
-- [ ] **Structured critic output** — return the score/strengths/gaps as JSON for programmatic gating.
-- [ ] **Export** — save reports to Markdown / PDF.
-- [ ] **Streaming UI** — a small web front end over the pipeline.
+Shipped since v1 (linear pipeline): ✅ revision loop · ✅ multi-source parallel scraping · ✅ inline citation enforcement · ✅ structured critic output · ✅ streaming web UI · ✅ cost tracing · ✅ eval harness · ✅ reliability layer · ✅ live deploy.
+
+Next:
+
+- [ ] **RAG grounding** — embed sources into FAISS, retrieve per section, verify cited URLs against the real source set.
+- [ ] **Persistence & job queue** — `POST /research` → `job_id`, background execution, run history in Postgres (LangGraph checkpointer for resumable runs).
+- [ ] **Prompt-injection hardening** — sandbox scraped content as untrusted data.
+- [ ] **CI** — GitHub Actions running `pytest` on every push.
+- [ ] **Export** — one-click Markdown / PDF report download.
 
 ---
 
 ## 📄 License
 
-MIT License — feel free to use, modify, and extend.
+MIT — free to use, modify, and extend.
 
 ---
 
-<p align="center"><i>Built to demonstrate multi-agent orchestration, tool-calling, and self-critiquing LLM pipelines with LangGraph + Groq.</i></p>
+<p align="center"><i>A grounded, self-refining, observable multi-agent research system — LangGraph · Groq · FastAPI. <a href="https://researchmind-8wxf.onrender.com/">Live demo →</a></i></p>

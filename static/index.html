@@ -156,6 +156,19 @@
         padding: 0.25rem 0.4rem;
         font-family: "DM Mono";
       }
+      .opts select {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        padding: 0.25rem 0.4rem;
+        font-family: "DM Mono";
+        font-size: 0.7rem;
+      }
+      .opts select option {
+        background: var(--bg-alt);
+        color: var(--text);
+      }
       .chips-try {
         display: flex;
         gap: 0.5rem;
@@ -215,6 +228,17 @@
         font-weight: 600;
       }
 
+      .runmeta {
+        font-family: "DM Mono";
+        font-size: 0.72rem;
+        color: var(--muted);
+        margin-top: 0.7rem;
+        letter-spacing: 0.04em;
+      }
+      .runmeta b {
+        color: var(--primary);
+        font-weight: 500;
+      }
       .divider {
         height: 1px;
         background: linear-gradient(
@@ -710,6 +734,13 @@
           >max revisions
           <input id="qmax" type="number" value="3" min="1" max="6"
         /></label>
+        <label
+          >format
+          <select id="qformat">
+            <option value="report">Report (concise)</option>
+            <option value="paper">Paper (IEEE)</option>
+          </select>
+        </label>
         <span class="chips-try">
           <span class="try">RAG evaluation methods</span>
           <span class="try">Small language models</span>
@@ -736,6 +767,7 @@
           <div class="v" id="st-time">—</div>
         </div>
       </div>
+      <div class="runmeta hidden" id="runmeta"></div>
 
       <div class="divider"></div>
 
@@ -1026,6 +1058,7 @@
         }
         bar = parseInt($("#qbar").value) || 8;
         const max = parseInt($("#qmax").value) || 3;
+        const fmt = $("#qformat").value || "report";
         resetUI();
         startTimer();
         runBtn.disabled = true;
@@ -1036,7 +1069,7 @@
           `<b>Pipeline started</b> · topic: “${topic}” · bar ${bar}/10`,
         );
 
-        const url = `/research?topic=${encodeURIComponent(topic)}&quality_bar=${bar}&max_revisions=${max}`;
+        const url = `/research?topic=${encodeURIComponent(topic)}&quality_bar=${bar}&max_revisions=${max}&report_format=${fmt}`;
         const es = new EventSource(url);
 
         es.onmessage = (e) => {
@@ -1118,13 +1151,24 @@
               runBtn.disabled = false;
               runBtn.textContent = "⚡ Run research";
               const finalScore =
-                d.history && d.history.length
-                  ? d.history[d.history.length - 1]
-                  : "—";
+                typeof d.best_score === "number"
+                  ? d.best_score
+                  : d.history && d.history.length
+                    ? d.history[d.history.length - 1]
+                    : "—";
               log(
                 "done",
-                `<b>Complete</b> · ${d.revisions} revision(s) · final ${finalScore}/${bar}`,
+                `<b>Complete</b> · ${d.revisions} revision(s) · best ${finalScore}/${bar}`,
               );
+              if (d.metrics) {
+                const m = d.metrics;
+                const rm = $("#runmeta");
+                rm.classList.remove("hidden");
+                rm.innerHTML =
+                  `<b>${m.llm_calls}</b> LLM calls · <b>${m.total_tokens.toLocaleString()}</b> tokens ` +
+                  `(${m.input_tokens.toLocaleString()} in / ${m.output_tokens.toLocaleString()} out) · ` +
+                  `<b>$${m.cost_usd}</b> · <b>${m.llm_latency_s}s</b> model time`;
+              }
               break;
             case "error":
               es.close();

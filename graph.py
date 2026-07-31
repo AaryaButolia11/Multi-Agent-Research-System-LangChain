@@ -27,8 +27,9 @@ from typing import TypedDict
 from langgraph.graph import StateGraph, END
 
 from tools import search_web, scrape_many
-from agents import writer_chain, critic_chain, gap_chain, Critique, GapQueries
+from agents import writer_chain, critic_chain, gap_chain, Critique, GapQueries, structure_for
 from reliability import ainvoke_safe
+from config import REPORT_FORMAT
 
 
 class ResearchState(TypedDict, total=False):
@@ -43,6 +44,7 @@ class ResearchState(TypedDict, total=False):
     revision: int             # drafts written so far
     max_revisions: int
     quality_bar: int
+    report_format: str        # "report" (concise) or "paper" (full IEEE academic)
     score_history: list[int]  # score after each revision — the "climb"
     best_report: str          # highest-scoring draft seen
     best_score: int
@@ -95,7 +97,12 @@ async def write_node(state: ResearchState) -> dict:
     )
     report = await ainvoke_safe(
         writer_chain,
-        {"topic": state["topic"], "research": research, "feedback": feedback},
+        {
+            "topic": state["topic"],
+            "research": research,
+            "feedback": feedback,
+            "structure": structure_for(state.get("report_format", REPORT_FORMAT)),
+        },
         label="writer",
     )
     return {"report": report, "revision": state.get("revision", 0) + 1}
@@ -204,12 +211,14 @@ def build_graph():
 graph = build_graph()
 
 
-def initial_state(topic: str, quality_bar: int = 8, max_revisions: int = 3) -> ResearchState:
+def initial_state(topic: str, quality_bar: int = 8, max_revisions: int = 3,
+                  report_format: str = REPORT_FORMAT) -> ResearchState:
     return {
         "topic": topic,
         "revision": 0,
         "quality_bar": quality_bar,
         "max_revisions": max_revisions,
+        "report_format": report_format,
         "score_history": [],
         "seen_urls": [],
         "best_score": -1,
