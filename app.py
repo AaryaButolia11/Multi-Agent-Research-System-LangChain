@@ -623,7 +623,7 @@ if st.session_state.running and not st.session_state.done:
     topic_val = st.session_state.topic_input
 
     # Step 1: Search
-    with st.spinner("🔍  Search Agent is working…"):
+    with st.spinner("Search Agent is working…"):
         search_agent = build_search_agent()
         sr = search_agent.invoke({
             "messages": [("user", f"Find recent, reliable and detailed information about: {topic_val}")]
@@ -632,7 +632,7 @@ if st.session_state.running and not st.session_state.done:
         st.session_state.results = dict(results)
 
     # Step 2: Reader
-    with st.spinner("📄  Reader Agent is scraping top resources…"):
+    with st.spinner("Reader Agent is scraping top resources…"):
         reader_agent = build_reader_agent()
         rr = reader_agent.invoke({
             "messages": [("user",
@@ -645,7 +645,7 @@ if st.session_state.running and not st.session_state.done:
         st.session_state.results = dict(results)
 
     # Step 3: Writer
-    with st.spinner("✍️  Writer is drafting the report…"):
+    with st.spinner("Writer is drafting the report…"):
         research_combined = (
             f"SEARCH RESULTS:\n{results['search']}\n\n"
             f"DETAILED SCRAPED CONTENT:\n{results['reader']}"
@@ -657,7 +657,7 @@ if st.session_state.running and not st.session_state.done:
         st.session_state.results = dict(results)
 
     # Step 4: Critic
-    with st.spinner("🧐  Critic is reviewing the report…"):
+    with st.spinner("Critic is reviewing the report…"):
         results["critic"] = critic_chain.invoke({
             "report": results["writer"]
         })

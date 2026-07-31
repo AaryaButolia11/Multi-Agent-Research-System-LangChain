@@ -1,75 +1,52 @@
-from agents import build_reader_agent,build_search_agent,writer_chain, critic_chain
+"""
+CLI entry point. Streams each node as it fires so you can watch the refine loop
+climb from the terminal:
 
-def run_research_pipeline(topic:str)->dict:
-    
-    state={}
-    #search agent working 
-    print("\n"+" ="*50)
-    print ("step 1 - search agent is working ...")
-    print("="*50)
-    
-    search_agent=build_search_agent()
-    search_result=search_agent.invoke({
-        "messages":[("user",f"Find recent, reliable and detailed information about: {topic}")]
-    })
-    state["search_results"]=search_result['messages'][-1].content
-    
-    print("\n search result: ",state['search_results'])
-    
-    #step-2 reader agent
-    print("\n"+" ="*50)
-    print("step 2 - reader agent is scraping top resources ...")
-    print("="*50)
-    
-    reader_agent=build_reader_agent()
-    reader_result=reader_result = reader_agent.invoke({
-        "messages": [("user",
-            f"Based on the following search results about '{topic}', "
-            f"pick the most relevant URL and scrape it for deeper content.\n\n"
-            f"Search Results:\n{state['search_results'][:800]}"
-        )]
-    })
-    
-    state['scraped_content']=reader_result['messages'][-1].content
-    
-    print("Scrapped result: \n",state['scraped_content'])
-    
-    
-    # step 3 writer chain
+    python pipeline.py
+"""
 
-    print("\n"+" ="*50)
-    print("step 3 - Writer is drafting the report ...")
-    print("="*50)
+import asyncio
 
-    research_combined=(
-        f"SEARCH RESULTS: \n{state['search_results']}\n\n"
-        f"DETAILED SCRAPED CONTENT: \n {state['scraped_content']}\n\n"
-    )
+from graph import graph, initial_state
+from metrics import MetricsCallback
 
 
-    state["report"]=writer_chain.invoke({
-        "topic":topic,
-        "research":research_combined
-    })
+async def run(topic: str, quality_bar: int = 8, max_revisions: int = 3) -> dict:
+    state = initial_state(topic, quality_bar, max_revisions)
+    cb = MetricsCallback()
+    final: dict = {}
 
-    print("\n Final Report\n",state['report'])
-    
-    #critic report 
+    async for event in graph.astream(state, config={"callbacks": [cb]}):
+        for node, update in event.items():
+            final.update(update)
+            if node == "search":
+                print(f"[search]  found {len(update.get('urls', []))} sources")
+            elif node == "read":
+                print(f"[read]    scraped {len(update.get('sources',''))} chars")
+            elif node == "write":
+                print(f"[write]   draft #{update.get('revision')} ready")
+            elif node == "gap_search":
+                print(f"[gap]     +{update.get('new_source_count')} new sources for "
+                      f"{update.get('gap_queries')}")
+            elif node == "critic":
+                print(f"[critic]  score {update.get('score')}/10  "
+                      f"→ {'accept' if update.get('score') >= quality_bar else 'research more'}")
 
-    print("\n"+" ="*50)
-    print("step 4 - critic is reviewing the report ")
-    print("="*50)
-    
-    state["feedback"]=critic_chain.invoke({
-        "report":state['report']
-    })
-    
-    print("\n Critic Reports: \n",state['feedback'])
-    
-    return state
+    best = final.get("best_report") or final.get("report", "")
+    m = cb.summary()
+    print("\n" + "=" * 60)
+    print(f"Finished in {final.get('revision')} revision(s). "
+          f"Score trajectory: {final.get('score_history')}  "
+          f"Best: {final.get('best_score')}/10")
+    print(f"Metrics: {m['llm_calls']} LLM calls · {m['total_tokens']:,} tokens · "
+          f"${m['cost_usd']} · {m['llm_latency_s']}s model time")
+    print("=" * 60 + "\n")
+    print(best)
+    print("\n--- CRITIC ---")
+    print(final.get("critique"))
+    return final
 
 
 if __name__ == "__main__":
-    topic = input("\n Enter a research topic : ")
-    run_research_pipeline(topic)
-    
+    topic = input("Enter a research topic: ").strip()
+    asyncio.run(run(topic))
