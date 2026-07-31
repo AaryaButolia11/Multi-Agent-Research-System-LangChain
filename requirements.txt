@@ -17,6 +17,7 @@ uvicorn[standard]>=0.29.0
 tenacity>=8.2.0
 pydantic>=2.5.0
 python-dotenv>=1.0.0
+reportlab>=4.0.0
 
 # Testing / evaluation
 pytest>=8.0.0

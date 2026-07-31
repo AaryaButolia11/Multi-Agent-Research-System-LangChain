@@ -10,7 +10,6 @@
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
     <style>
       :root {
         --primary: #00d4ff;
@@ -1107,67 +1106,32 @@
       async function downloadPdf() {
         const d = drafts[active];
         if (!d) return;
-        if (!window.html2pdf) {
-          alert("PDF library is still loading — try again in a second.");
-          return;
-        }
-
         const btn = document.getElementById("dlpdf");
         const label = btn.textContent;
         btn.textContent = "Generating…";
         btn.disabled = true;
-
-        // Build a real, laid-out A4 sheet in the DOM (off-screen). An unattached or
-        // zero-height element captures blank — this is the fix for the blank pages.
-        const sheet = document.createElement("div");
-        sheet.className = "pdf-sheet";
-        sheet.innerHTML = marked.parse(d.report || "");
-        // link + table styling for print
-        sheet.querySelectorAll("a").forEach((a) => {
-          a.style.color = "#0645ad";
-          a.style.wordBreak = "break-word";
-        });
-        sheet.querySelectorAll("table").forEach((t) => {
-          t.style.borderCollapse = "collapse";
-          t.style.width = "100%";
-          t.style.margin = "12px 0";
-        });
-        sheet.querySelectorAll("th,td").forEach((c) => {
-          c.style.border = "1px solid #999";
-          c.style.padding = "6px 8px";
-          c.style.fontSize = "10pt";
-          c.style.textAlign = "left";
-        });
-        sheet.querySelectorAll("h1,h2,h3").forEach((h) => {
-          h.style.pageBreakAfter = "avoid";
-        });
-        document.body.appendChild(sheet);
-
         try {
-          await new Promise((r) => setTimeout(r, 80)); // let layout settle before capture
-          await html2pdf()
-            .set({
-              margin: [14, 14, 16, 14],
-              filename: `research_report_draft${d.rev}.pdf`,
-              image: { type: "jpeg", quality: 0.98 },
-              html2canvas: {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: "#ffffff",
-                windowWidth: 794,
-              },
-              jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-              pagebreak: {
-                mode: ["css", "legacy"],
-                avoid: ["tr", "h1", "h2", "h3"],
-              },
-            })
-            .from(sheet)
-            .save();
+          const title = (topicEl.value || "Research Report").trim();
+          const res = await fetch("/download/pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              markdown: d.report || "",
+              title,
+              filename: `research_report_draft${d.rev}`,
+            }),
+          });
+          if (!res.ok) throw new Error("server responded " + res.status);
+          const blob = await res.blob();
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = `research_report_draft${d.rev}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
         } catch (e) {
           alert("PDF generation failed: " + e.message);
         } finally {
-          sheet.remove();
           btn.textContent = label;
           btn.disabled = false;
         }

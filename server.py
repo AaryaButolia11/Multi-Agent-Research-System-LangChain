@@ -17,10 +17,11 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, Response
 
 from graph import graph, initial_state
 from metrics import MetricsCallback
+from pdf_export import markdown_to_pdf
 
 app = FastAPI(title="ResearchMind")
 
@@ -51,6 +52,20 @@ async def index():
 @app.get("/favicon.ico")
 async def favicon():
     return HTMLResponse("", status_code=204)
+
+
+@app.post("/download/pdf")
+async def download_pdf(request: Request):
+    body = await request.json()
+    md = body.get("markdown", "")
+    title = body.get("title", "Research Report")
+    filename = (body.get("filename", "research_report") or "research_report").replace('"', "")
+    pdf = markdown_to_pdf(md, title=title)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+    )
 
 
 @app.get("/research")
